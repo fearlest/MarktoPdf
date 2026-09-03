@@ -1,7 +1,10 @@
+using System;
+using System.IO;
+using System.Threading.Tasks;
 using PuppeteerSharp;
 using PuppeteerSharp.Media;
-namespace MarktoPdf.Services;
 
+namespace MarkToPdf.Services;
 public class PdfService
 {
             public async Task  GeneratePdfAsync(string htmlBody, string outputPath)

@@ -1,0 +1,18 @@
+﻿==================================================
+              MARK TO PDF TEST RAPORU             
+==================================================
+
+Tarih: 2026-09-03
+Durum: Sistem aktif ve test ediliyor.
+
+Modüller:
+1. IDocumentConverter Arayüzü -> Aktif
+2. TextConverter Servisi      -> Aktif
+3. MarkdownConverter Servisi  -> Aktif
+4. ConverterFactory           -> Aktif
+
+Not:
+Bu bir düz metin (.txt) dosyasıdır.
+Boşluklar ve satır düzeni doğrudan PDF çıktısına yansımalıdır.
+
+==================================================
