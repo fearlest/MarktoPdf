@@ -1,0 +1,6 @@
+Plaintext
+g
+bin/
+obj/
+.local-chromium/
+*.pdf
