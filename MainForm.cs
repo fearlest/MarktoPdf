@@ -69,7 +69,7 @@ namespace MarkToPdf
         {
             using (OpenFileDialog ofd = new OpenFileDialog())
             {
-                 ofd.Filter = "Tüm Desteklenen Dosyalar (*.md;*.txt;*.png;*.jpg;*.jpeg)|*.md;*.txt;*.png;*.jpg;*.jpeg|Görseller (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg|Markdown (*.md)|*.md|Düz Metin (*.txt)|*.txt|Tüm Dosyalar (*.*)|*.*";                if (ofd.ShowDialog() == DialogResult.OK)
+                 ofd.Filter = "Tüm Desteklenen Dosyalar (*.md;*.txt;*.png;*.jpg;*.jpeg;*.docx)|*.md;*.txt;*.png;*.jpg;*.jpeg;*.docx|Görseller (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg|Markdown (*.md)|*.md|Düz Metin (*.txt)|*.txt|Word Belgesi (*.docx)|*.docx|Tüm Dosyalar (*.*)|*.*";                if (ofd.ShowDialog() == DialogResult.OK)
                 {
                     txtFilePath.Text = ofd.FileName;
                     lblStatus.Text = "Dosya seçildi. Dönüştürmeye hazır.";

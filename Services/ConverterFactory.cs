@@ -13,8 +13,9 @@ namespace MarkToPdf.Services
             _converters = new List<IDocumentConverter>
             {
                 new MarkdownConverter(),
-                new TextConverter(),
-                new ImageConverter()
+                new TextConverter(),    
+                new ImageConverter(),
+                new DocxConverter()
             
             };
             
@@ -23,7 +24,13 @@ namespace MarkToPdf.Services
             public IDocumentConverter GetDocumentConverter (string filepath)
         {
             string extension = Path.GetExtension (filepath).ToLower ();
-            foreach (var converter in _converters)
+
+
+            if (extension == ".jpg" || extension == ".jpeg" || extension == ".png")
+                {
+                    return new ImageConverter();
+                }
+              foreach (var converter in _converters)
             {
                 if (converter.SupportedExtension.Equals(extension, StringComparison.OrdinalIgnoreCase))
                 return converter;
