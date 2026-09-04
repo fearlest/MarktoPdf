@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.105.1" />
     <PackageReference Include="Mammoth" Version="1.12.1" />
     <PackageReference Include="Markdig" Version="0.37.0" />
     <PackageReference Include="PuppeteerSharp" Version="20.0.2" />

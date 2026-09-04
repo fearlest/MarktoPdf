@@ -16,7 +16,8 @@ namespace MarkToPdf.Services
                 new TextConverter(),    
                 new ImageConverter(),
                 new DocxConverter(),
-                new HtmlConverter()
+                new HtmlConverter(),
+                new ExcelConverter()
             
             };
             
@@ -25,13 +26,18 @@ namespace MarkToPdf.Services
             public IDocumentConverter GetDocumentConverter (string filepath)
         {
             string extension = Path.GetExtension (filepath).ToLower ();
+            
+            if (extension == ".xlsx")
+            {
+                return new ExcelConverter();
+            }
 
 
              if (extension == ".html" || extension == ".htm")
             {
                 return new HtmlConverter();
                 }
-                
+
 
             if (extension == ".jpg" || extension == ".jpeg" || extension == ".png")
                 {
