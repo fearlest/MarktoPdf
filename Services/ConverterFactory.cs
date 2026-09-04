@@ -15,7 +15,8 @@ namespace MarkToPdf.Services
                 new MarkdownConverter(),
                 new TextConverter(),    
                 new ImageConverter(),
-                new DocxConverter()
+                new DocxConverter(),
+                new HtmlConverter()
             
             };
             
@@ -26,15 +27,23 @@ namespace MarkToPdf.Services
             string extension = Path.GetExtension (filepath).ToLower ();
 
 
+             if (extension == ".html" || extension == ".htm")
+            {
+                return new HtmlConverter();
+                }
+                
+
             if (extension == ".jpg" || extension == ".jpeg" || extension == ".png")
                 {
                     return new ImageConverter();
                 }
+
               foreach (var converter in _converters)
             {
                 if (converter.SupportedExtension.Equals(extension, StringComparison.OrdinalIgnoreCase))
                 return converter;
             }
+
             throw new NotSupportedException($"Desteklenmeyen dosya türü: {extension}");
         }
         
