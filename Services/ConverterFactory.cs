@@ -7,14 +7,17 @@ namespace MarkToPdf.Services
     public class ConverterFactory
     {
         private readonly List<IDocumentConverter> _converters;
-
+        
         public ConverterFactory()
         {
             _converters = new List<IDocumentConverter>
             {
                 new MarkdownConverter(),
-                new TextConverter()
+                new TextConverter(),
+                new ImageConverter()
+            
             };
+            
         }
          
             public IDocumentConverter GetDocumentConverter (string filepath)
