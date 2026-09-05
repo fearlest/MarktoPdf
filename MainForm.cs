@@ -1,7 +1,10 @@
 using System;
+using System.Drawing;
 using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Forms;
-using Markdig;
+using PuppeteerSharp;
 using MarkToPdf.Services;
 
 namespace MarkToPdf
@@ -12,12 +15,16 @@ namespace MarkToPdf
         private Button btnBrowse;
         private Button btnConvert;
         private Label lblStatus;
+        private string selectedFilePath = string.Empty;
+
+        private readonly ConverterFactory _converterFactory;
 
         public MainForm()
         {
+            _converterFactory = new ConverterFactory();
+
             this.Text = "MarkToPdf - Doküman Dönüştürücü";
-            this.Width = 520;
-            this.Height = 220;
+            this.Size = new Size(520, 230);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.StartPosition = FormStartPosition.CenterScreen;
@@ -26,17 +33,16 @@ namespace MarkToPdf
             {
                 Left = 20,
                 Top = 30,
-                Width = 340,
-                ReadOnly = true,
-                PlaceholderText = "Lütfen dönüştürülecek .md dosyasını seçin..."
+                Width = 350,
+                ReadOnly = true
             };
 
             btnBrowse = new Button()
             {
                 Text = "Gözat...",
-                Left = 370,
+                Left = 380,
                 Top = 28,
-                Width = 110,
+                Width = 100,
                 Height = 26
             };
             btnBrowse.Click += BtnBrowse_Click;
@@ -45,9 +51,10 @@ namespace MarkToPdf
             {
                 Text = "PDF'e Dönüştür",
                 Left = 20,
-                Top = 80,
+                Top = 75,
                 Width = 460,
-                Height = 38
+                Height = 38,
+                Font = new Font(this.Font.FontFamily, 10, FontStyle.Bold)
             };
             btnConvert.Click += BtnConvert_Click;
 
@@ -63,56 +70,97 @@ namespace MarkToPdf
             this.Controls.Add(btnBrowse);
             this.Controls.Add(btnConvert);
             this.Controls.Add(lblStatus);
+
+            // Sürükle - Bırak (Drag & Drop)
+            this.AllowDrop = true;
+            this.DragEnter += MainForm_DragEnter;
+            this.DragDrop += MainForm_DragDrop;
         }
+
+        private void MainForm_DragEnter(object? sender, DragEventArgs e)
+        {
+            if (e.Data != null && e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                e.Effect = DragDropEffects.Copy;
+            }
+            else
+            {
+                e.Effect = DragDropEffects.None;
+            }
+        }
+
+      private void MainForm_DragDrop(object? sender, DragEventArgs e)
+{
+    if (e.Data?.GetData(DataFormats.FileDrop) is string[] files && files.Length > 0)
+    {
+        string droppedFile = files[0];
+        string extension = Path.GetExtension(droppedFile).ToLowerInvariant();
+
+        string[] supportedExtensions = { ".md", ".txt", ".png", ".jpg", ".jpeg", ".docx", ".html", ".htm", ".xlsx" };
+
+        if (supportedExtensions.Contains(extension))
+        {
+            selectedFilePath = droppedFile;
+            txtFilePath.Text = droppedFile;
+            lblStatus.Text = $"Dosya seçildi: {Path.GetFileName(droppedFile)}";
+        }
+        else
+        {
+            MessageBox.Show($"Desteklenmeyen dosya türü: {extension}\nLütfen desteklenen bir döküman veya görsel bırakın.",
+                            "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+}
 
         private void BtnBrowse_Click(object? sender, EventArgs e)
         {
             using (OpenFileDialog ofd = new OpenFileDialog())
             {
-                 ofd.Filter = "Tüm Desteklenen Dosyalar (*.md;*.txt;*.png;*.jpg;*.jpeg;*.docx;*.html;*.xlsx)|*.md;*.txt;*.png;*.jpg;*.jpeg;*.docx;*.html;*.xlsx|Görseller (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg|Markdown (*.md)|*.md|Düz Metin (*.txt)|*.txt|Word Belgesi (*.docx)|*.docx|HTML Dosyası (*.html)|*.html|Excel Dosyası (*.xlsx)|*.xlsx|Tüm Dosyalar (*.*)|*.*";                if (ofd.ShowDialog() == DialogResult.OK)
+                ofd.Filter = "Tüm Desteklenen Dosyalar (*.md;*.txt;*.png;*.jpg;*.jpeg;*.docx;*.html;*.htm;*.xlsx)|*.md;*.txt;*.png;*.jpg;*.jpeg;*.docx;*.html;*.htm;*.xlsx|Excel Belgeleri (*.xlsx)|*.xlsx|Word Belgeleri (*.docx)|*.docx|HTML Dosyaları (*.html;*.htm)|*.html;*.htm|Görseller (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg|Markdown (*.md)|*.md|Düz Metin (*.txt)|*.txt|Tüm Dosyalar (*.*)|*.*";
+
+                if (ofd.ShowDialog() == DialogResult.OK)
                 {
+                    selectedFilePath = ofd.FileName;
                     txtFilePath.Text = ofd.FileName;
-                    lblStatus.Text = "Dosya seçildi. Dönüştürmeye hazır.";
+                    lblStatus.Text = $"Dosya seçildi: {Path.GetFileName(ofd.FileName)}";
                 }
             }
         }
 
         private async void BtnConvert_Click(object? sender, EventArgs e)
         {
-            string inputPath = txtFilePath.Text;
-
-            if (string.IsNullOrWhiteSpace(inputPath) || !File.Exists(inputPath))
+            if (string.IsNullOrWhiteSpace(selectedFilePath) || !File.Exists(selectedFilePath))
             {
-                MessageBox.Show("Lütfen geçerli bir dosya seçin!", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Lütfen geçerli bir dosya seçin veya sürükleyip bırakın!", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            btnConvert.Enabled = false;
-            btnBrowse.Enabled = false;
-            lblStatus.Text = "PDF oluşturuluyor, lütfen bekleyin...";
-
             try
             {
-               string outputPath = Path.ChangeExtension(inputPath, ".pdf");
+                btnConvert.Enabled = false;
+                btnBrowse.Enabled = false;
+                lblStatus.Text = "PDF oluşturuluyor, lütfen bekleyin...";
 
-                
-                var factory = new ConverterFactory();
-                var converter = factory.GetDocumentConverter(inputPath);
+                var converter = _converterFactory.GetDocumentConverter(selectedFilePath);
+                string htmlContent = converter.ConvertToHtml(selectedFilePath);
 
-                
-                string htmlBody = converter.ConvertToHtml(inputPath);
+                string outputPdfPath = Path.ChangeExtension(selectedFilePath, ".pdf");
 
-                
-                var pdfService = new PdfService();
-                await pdfService.GeneratePdfAsync(htmlBody, outputPath);
+                var browserFetcher = new BrowserFetcher();
+                await browserFetcher.DownloadAsync();
 
-                lblStatus.Text = $"Başarılı! Kaydedildi: {Path.GetFileName(outputPath)}";
-                MessageBox.Show($"PDF başarıyla oluşturuldu:\n{outputPath}", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                await using var browser = await Puppeteer.LaunchAsync(new LaunchOptions { Headless = true });
+                await using var page = await browser.NewPageAsync();
+                await page.SetContentAsync(htmlContent);
+                await page.PdfAsync(outputPdfPath);
+
+                lblStatus.Text = "Dönüştürme tamamlandı!";
+                MessageBox.Show($"PDF başarıyla oluşturuldu:\n{outputPdfPath}", "Başarılı", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
                 lblStatus.Text = "Hata oluştu!";
-                MessageBox.Show($"Dönüştürme sırasında hata:\n{ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Dönüştürme sırasında hata oluştu:\n{ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
@@ -121,18 +169,4 @@ namespace MarkToPdf
             }
         }
     }
-
-    // MarkdownService'i doğrudan burada tanımlıyoruz:
-    public class MarkdownService
-    {
-        public string ConvertMarkdownToHtml(string markdownContent)
-        {
-            var pipeline = new MarkdownPipelineBuilder()
-                .UseAdvancedExtensions()
-                .Build();
-
-            return Markdown.ToHtml(markdownContent, pipeline);
-        }
-    }
 }
-
