@@ -6,11 +6,13 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using PuppeteerSharp;
 using MarkToPdf.Services;
+using DocumentFormat.OpenXml.Office.PowerPoint.Y2021.M06.Main;
 
 namespace MarkToPdf
 {
     public class MainForm : Form
     {
+        private ProgressBar progressBar;
         private TextBox txtFilePath;
         private Button btnBrowse;
         private Button btnConvert;
@@ -24,7 +26,7 @@ namespace MarkToPdf
             _converterFactory = new ConverterFactory();
 
             this.Text = "MarkToPdf - Doküman Dönüştürücü";
-            this.Size = new Size(520, 230);
+            this.Size = new Size(520, 250);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.StartPosition = FormStartPosition.CenterScreen;
@@ -57,12 +59,20 @@ namespace MarkToPdf
                 Font = new Font(this.Font.FontFamily, 10, FontStyle.Bold)
             };
             btnConvert.Click += BtnConvert_Click;
+            progressBar = new ProgressBar()
+            {
+                Left = 20,
+                Top = 125,
+                Width = 460,
+                Height = 16,
+                Visible = false
+            };
 
             lblStatus = new Label()
             {
                 Text = "Hazır",
                 Left = 20,
-                Top = 135,
+                Top = 155,
                 Width = 460
             };
 
@@ -70,6 +80,7 @@ namespace MarkToPdf
             this.Controls.Add(btnBrowse);
             this.Controls.Add(btnConvert);
             this.Controls.Add(lblStatus);
+            this.Controls.Add(progressBar);
 
             // Sürükle - Bırak (Drag & Drop)
             this.AllowDrop = true;
@@ -134,12 +145,19 @@ namespace MarkToPdf
                 MessageBox.Show("Lütfen geçerli bir dosya seçin veya sürükleyip bırakın!", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
-
+             
             try
             {
                 btnConvert.Enabled = false;
                 btnBrowse.Enabled = false;
+
+                 progressBar.Visible = true;
+                 progressBar.Style = ProgressBarStyle.Marquee;
+                 progressBar.MarqueeAnimationSpeed = 30;
+
                 lblStatus.Text = "PDF oluşturuluyor, lütfen bekleyin...";
+
+                
 
                 var converter = _converterFactory.GetDocumentConverter(selectedFilePath);
                 string htmlContent = converter.ConvertToHtml(selectedFilePath);
@@ -166,6 +184,9 @@ namespace MarkToPdf
             {
                 btnConvert.Enabled = true;
                 btnBrowse.Enabled = true;
+
+                progressBar.Style = ProgressBarStyle.Blocks;
+                progressBar.Value = 100;
             }
         }
     }
