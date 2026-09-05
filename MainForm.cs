@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -17,8 +18,7 @@ namespace MarkToPdf
         private Button btnBrowse;
         private Button btnConvert;
         private Label lblStatus;
-        private string selectedFilePath = string.Empty;
-
+        private List<string> selectedFilePaths = new List<string>();
         private readonly ConverterFactory _converterFactory;
 
         public MainForm()
@@ -100,94 +100,140 @@ namespace MarkToPdf
             }
         }
 
-      private void MainForm_DragDrop(object? sender, DragEventArgs e)
+     private void MainForm_DragDrop(object? sender, DragEventArgs e)
 {
     if (e.Data?.GetData(DataFormats.FileDrop) is string[] files && files.Length > 0)
     {
-        string droppedFile = files[0];
-        string extension = Path.GetExtension(droppedFile).ToLowerInvariant();
-
         string[] supportedExtensions = { ".md", ".txt", ".png", ".jpg", ".jpeg", ".docx", ".html", ".htm", ".xlsx" };
 
-        if (supportedExtensions.Contains(extension))
+        // Bırakılan dosyalardan sadece desteklenenleri filtrele
+        var validFiles = files
+            .Where(f => supportedExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+            .ToList();
+
+        if (validFiles.Count > 0)
         {
-            selectedFilePath = droppedFile;
-            txtFilePath.Text = droppedFile;
-            lblStatus.Text = $"Dosya seçildi: {Path.GetFileName(droppedFile)}";
+            selectedFilePaths = validFiles;
+            UpdateSelectionDisplay();
         }
         else
         {
-            MessageBox.Show($"Desteklenmeyen dosya türü: {extension}\nLütfen desteklenen bir döküman veya görsel bırakın.",
+            MessageBox.Show("Bırakılan dosyalar arasında desteklenen bir format bulunamadı.",
                             "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 }
 
+
+         private void UpdateSelectionDisplay()
+        {
+            if(selectedFilePaths.Count == 1)
+            {
+                txtFilePath.Text = selectedFilePaths[0];
+                lblStatus.Text = $"Seçildi: {Path.GetFileName(selectedFilePaths[0])}";
+            }
+            else
+            {
+                txtFilePath.Text = $"{selectedFilePaths.Count} dosya seçildi";
+                lblStatus.Text = $"{selectedFilePaths.Count} adet dosya dönüştürülmeye hazır.";
+            }
+            progressBar.Visible = false;
+            progressBar.Value = 0;
+
+
+
+        }
         private void BtnBrowse_Click(object? sender, EventArgs e)
         {
             using (OpenFileDialog ofd = new OpenFileDialog())
             {
+                ofd.Multiselect = true;
                 ofd.Filter = "Tüm Desteklenen Dosyalar (*.md;*.txt;*.png;*.jpg;*.jpeg;*.docx;*.html;*.htm;*.xlsx)|*.md;*.txt;*.png;*.jpg;*.jpeg;*.docx;*.html;*.htm;*.xlsx|Excel Belgeleri (*.xlsx)|*.xlsx|Word Belgeleri (*.docx)|*.docx|HTML Dosyaları (*.html;*.htm)|*.html;*.htm|Görseller (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg|Markdown (*.md)|*.md|Düz Metin (*.txt)|*.txt|Tüm Dosyalar (*.*)|*.*";
 
                 if (ofd.ShowDialog() == DialogResult.OK)
                 {
-                    selectedFilePath = ofd.FileName;
-                    txtFilePath.Text = ofd.FileName;
-                    lblStatus.Text = $"Dosya seçildi: {Path.GetFileName(ofd.FileName)}";
+                    selectedFilePaths = ofd.FileNames.ToList();
+                    UpdateSelectionDisplay();
                 }
             }
         }
 
         private async void BtnConvert_Click(object? sender, EventArgs e)
+{
+    if (selectedFilePaths.Count == 0)
+    {
+        MessageBox.Show("Lütfen dönüştürülecek en az bir dosya seçin veya sürükleyip bırakın!", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        return;
+    }
+
+    try
+    {
+        btnConvert.Enabled = false;
+        btnBrowse.Enabled = false;
+
+        // ProgressBar'ı adım adım moda alıyoruz
+        progressBar.Visible = true;
+        progressBar.Style = ProgressBarStyle.Blocks;
+        progressBar.Minimum = 0;
+        progressBar.Maximum = selectedFilePaths.Count;
+        progressBar.Value = 0;
+
+        lblStatus.Text = "Tarayıcı motoru hazırlanıyor...";
+
+        var browserFetcher = new BrowserFetcher();
+        await browserFetcher.DownloadAsync();
+
+        // Chromium'u sadece 1 defa başlatıyoruz
+        await using var browser = await Puppeteer.LaunchAsync(new LaunchOptions { Headless = true });
+
+        int successCount = 0;
+        int failCount = 0;
+
+        for (int i = 0; i < selectedFilePaths.Count; i++)
         {
-            if (string.IsNullOrWhiteSpace(selectedFilePath) || !File.Exists(selectedFilePath))
-            {
-                MessageBox.Show("Lütfen geçerli bir dosya seçin veya sürükleyip bırakın!", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-             
+            string filePath = selectedFilePaths[i];
+            string fileName = Path.GetFileName(filePath);
+
+            lblStatus.Text = $"Dönüştürülüyor ({i + 1}/{selectedFilePaths.Count}): {fileName}";
+
             try
             {
-                btnConvert.Enabled = false;
-                btnBrowse.Enabled = false;
+                var converter = _converterFactory.GetDocumentConverter(filePath);
+                string htmlContent = converter.ConvertToHtml(filePath);
 
-                 progressBar.Visible = true;
-                 progressBar.Style = ProgressBarStyle.Marquee;
-                 progressBar.MarqueeAnimationSpeed = 30;
+                string outputPdfPath = Path.ChangeExtension(filePath, ".pdf");
 
-                lblStatus.Text = "PDF oluşturuluyor, lütfen bekleyin...";
-
-                
-
-                var converter = _converterFactory.GetDocumentConverter(selectedFilePath);
-                string htmlContent = converter.ConvertToHtml(selectedFilePath);
-
-                string outputPdfPath = Path.ChangeExtension(selectedFilePath, ".pdf");
-
-                var browserFetcher = new BrowserFetcher();
-                await browserFetcher.DownloadAsync();
-
-                await using var browser = await Puppeteer.LaunchAsync(new LaunchOptions { Headless = true });
                 await using var page = await browser.NewPageAsync();
                 await page.SetContentAsync(htmlContent);
                 await page.PdfAsync(outputPdfPath);
 
-                lblStatus.Text = "Dönüştürme tamamlandı!";
-                MessageBox.Show($"PDF başarıyla oluşturuldu:\n{outputPdfPath}", "Başarılı", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                successCount++;
             }
-            catch (Exception ex)
+            catch
             {
-                lblStatus.Text = "Hata oluştu!";
-                MessageBox.Show($"Dönüştürme sırasında hata oluştu:\n{ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                failCount++;
             }
-            finally
-            {
-                btnConvert.Enabled = true;
-                btnBrowse.Enabled = true;
 
-                progressBar.Style = ProgressBarStyle.Blocks;
-                progressBar.Value = 100;
-            }
+            // Her dosya bittiğinde çubuğu bir adım doldur
+            progressBar.Value = i + 1;
         }
+
+        lblStatus.Text = $"Tamamlandı! (Başarılı: {successCount}, Hata: {failCount})";
+        MessageBox.Show($"Dönüştürme işlemi tamamlandı!\n\nBaşarılı: {successCount}\nHatalı: {failCount}", 
+                        "Sonuç", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
+    catch (Exception ex)
+    {
+        lblStatus.Text = "Genel hata oluştu!";
+        MessageBox.Show($"Beklenmedik bir hata oluştu:\n{ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+    }
+    finally
+    {
+        btnConvert.Enabled = true;
+        btnBrowse.Enabled = true;
+    }
+}
+
+}
+
 }
