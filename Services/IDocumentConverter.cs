@@ -2,7 +2,8 @@ namespace MarkToPdf.Services
 {
     public interface IDocumentConverter
     {
-        string SupportedExtension { get; }
+        // Bir converter birden fazla uzantıyı destekleyebilir (örn. .html ve .htm)
+        string[] SupportedExtensions { get; }
 
         string ConvertToHtml(string filePath);
     }

@@ -1,4 +1,4 @@
-using System.IO;
+using System.Net;
 using System.Text;
 using ClosedXML.Excel;
 
@@ -6,12 +6,12 @@ namespace MarkToPdf.Services
 {
     public class ExcelConverter : IDocumentConverter
     {
-        public string SupportedExtension => ".xlsx";
-        
-        public string ConvertToHtml(string filepath) 
+        public string[] SupportedExtensions => new[] { ".xlsx" };
+
+        public string ConvertToHtml(string filepath)
         {
             var sb = new StringBuilder();
-            sb.Append (@"
+            sb.Append(@"
                 <!DOCTYPE html>
                 <html>
                 <head>
@@ -50,55 +50,43 @@ namespace MarkToPdf.Services
                     </style>
                 </head>
                 <body>");
-                
+
             using (var workbook = new XLWorkbook(filepath))
             {
                 foreach (var worksheet in workbook.Worksheets)
                 {
                     var range = worksheet.RangeUsed();
-                     if (range == null) continue;
+                    if (range == null) continue;
 
-                     sb.Append($"<h2>{worksheet.Name}</h2>");
-                    sb.Append("<table>"); 
+                    sb.Append($"<h2>{WebUtility.HtmlEncode(worksheet.Name)}</h2>");
+                    sb.Append("<table>");
 
                     bool isFirstRow = true;
                     var rows = range.RowsUsed();
-                   
-                   foreach (var row in rows)
 
+                    foreach (var row in rows)
                     {
-                     sb.Append("<tr>");   
-                     foreach (var cell in row.Cells(1, range.ColumnCount()))
+                        sb.Append("<tr>");
+                        foreach (var cell in row.Cells(1, range.ColumnCount()))
                         {
-                            string cellValue = cell.GetFormattedString();
+                            // HTML encode: hücre içinde <, >, & gibi karakterler
+                            // tabloyu bozmasın diye kaçış karakterine çevriliyor.
+                            string cellValue = WebUtility.HtmlEncode(cell.GetFormattedString());
                             if (string.IsNullOrWhiteSpace(cellValue))
                             {
                                 cellValue = "&nbsp;";
                             }
-                            
-                            if (isFirstRow) 
-                            {
-                                sb.Append($"<th>{cellValue}</th>");
 
-                            }
-                            else
-                            {
-                                sb.Append($"<td>{cellValue}</td>");
-                            }
-
+                            sb.Append(isFirstRow ? $"<th>{cellValue}</th>" : $"<td>{cellValue}</td>");
                         }
                         sb.Append("</tr>");
                         isFirstRow = false;
-
-
                     }
                     sb.Append("</table>");
-
                 }
             }
             sb.Append("</body></html>");
-                return sb.ToString();
-
+            return sb.ToString();
         }
     }
 }

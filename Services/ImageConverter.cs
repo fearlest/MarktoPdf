@@ -5,17 +5,17 @@ namespace MarkToPdf.Services
 {
     public class ImageConverter : IDocumentConverter
     {
-public string SupportedExtension => ".png";
+        public string[] SupportedExtensions => new[] { ".png", ".jpg", ".jpeg" };
 
         public string ConvertToHtml(string filepath)
         {
-             byte[] imageBytes = File.ReadAllBytes(filepath);
+            byte[] imageBytes = File.ReadAllBytes(filepath);
             string base64String = Convert.ToBase64String(imageBytes);
-             
-             string extension = Path.GetExtension(filepath).ToLower().TrimStart('.');
-             string mimeType = extension  == "jpg" ? "jpeg" : extension;
 
-             return $@"
+            string extension = Path.GetExtension(filepath).ToLowerInvariant().TrimStart('.');
+            string mimeType = extension == "jpg" ? "jpeg" : extension;
+
+            return $@"
                 <!DOCTYPE html>
                 <html>
                 <head>

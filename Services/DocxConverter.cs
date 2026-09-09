@@ -1,12 +1,11 @@
-using System.IO;
-using  Mammoth;
+using Mammoth;
 
 namespace MarkToPdf.Services
 {
     public class DocxConverter : IDocumentConverter
     {
-        public string SupportedExtension => ".docx";
-        
+        public string[] SupportedExtensions => new[] { ".docx" };
+
         public string ConvertToHtml(string filepath)
         {
             var converter = new DocumentConverter();

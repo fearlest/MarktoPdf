@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using MarkToPdf.Services;
 using PuppeteerSharp;
+using PuppeteerSharp.Media;
 using Point = System.Drawing.Point;
 
 namespace MarkToPdf
@@ -60,6 +61,20 @@ namespace MarkToPdf
         private ProgressBar progressBar = null!;
         private Label lblStatus = null!;
 
+        // Dile göre yeniden çizilmesi gereken kontroller (dil değişince metinleri güncellenir)
+        private Label lblDropText = null!;
+        private Label lblUploads = null!;
+        private Label lblOptTitle = null!;
+        private Label lblSelFormat = null!;
+        private Label lblHelp = null!;
+        private Label lblAboutUs = null!;
+        private ColumnHeader colFileName = null!;
+        private ColumnHeader colSize = null!;
+        private ColumnHeader colStatus = null!;
+        private ColumnHeader colActions = null!;
+        private ToolStripMenuItem menuItemTurkish = null!;
+        private ToolStripMenuItem menuItemEnglish = null!;
+
         // Hover Durumları
         private bool isConvertHovered = false;
         private bool isClearHovered = false;
@@ -83,6 +98,7 @@ namespace MarkToPdf
             InitializeForm();
             SetupCustomUI();
             SetupAnimationTimer();
+            ApplyLanguage();
         }
 
         private string? FindAsset(string fileName)
@@ -153,6 +169,51 @@ namespace MarkToPdf
             this.FormClosed += (s, e) => animTimer.Stop();
         }
 
+        // Dil değiştiğinde (veya form ilk açıldığında) tüm arayüz metinlerini
+        // aktif dile göre günceller. Renkler/animasyon/layout'a dokunmaz.
+        private void ApplyLanguage()
+        {
+            lblDropText.Text = Localization.T("DropText");
+            lblUploads.Text = Localization.T("Uploads");
+            lblOptTitle.Text = Localization.T("ConversionOptions");
+            lblSelFormat.Text = Localization.T("SelectOutputFormat");
+            lblHelp.Text = Localization.T("Help");
+            lblAboutUs.Text = Localization.T("AboutUs");
+
+            colFileName.Text = Localization.T("ColFileName");
+            colSize.Text = Localization.T("ColSize");
+            colStatus.Text = Localization.T("ColStatus");
+            colActions.Text = Localization.T("ColActions");
+
+            if (cmbFormat.Items.Count > 0)
+            {
+                cmbFormat.Items[0] = Localization.T("PdfDocument");
+                cmbFormat.SelectedIndex = 0;
+            }
+
+            menuItemTurkish.Text = Localization.T("LangTurkish");
+            menuItemEnglish.Text = Localization.T("LangEnglish");
+            menuItemTurkish.Checked = Localization.Current == AppLanguage.Turkish;
+            menuItemEnglish.Checked = Localization.Current == AppLanguage.English;
+
+            // Henüz dosya seçilmemişse boş durum metnini de güncelle
+            if (selectedFilePaths.Count == 0)
+            {
+                lblStatus.Text = Localization.T("StatusIdle");
+            }
+
+            // CLEAR / START CONVERSION metinleri kendi Paint olaylarında
+            // Localization.T() ile canlı okunuyor, sadece yeniden çizilmeleri yeterli.
+            btnClear.Invalidate();
+            btnConvert.Invalidate();
+        }
+
+        private void SetLanguage(AppLanguage language)
+        {
+            Localization.Current = language;
+            ApplyLanguage();
+        }
+
         private void SetupCustomUI()
         {
             int mainX = (this.ClientSize.Width - 930) / 2;
@@ -168,7 +229,7 @@ namespace MarkToPdf
             pnlMainCard.Region = Region.FromHrgn(CreateRoundRectRgn(0, 0, pnlMainCard.Width, pnlMainCard.Height, 32, 32));
             this.Controls.Add(pnlMainCard);
 
-            // 2. BAŞLIK ("2 PDF CONVERTER") & SAĞ ÜST ÇARK
+            // 2. BAŞLIK ("2 PDF CONVERTER") & SAĞ ÜST AYARLAR (ÇARK)
             Label lblTitle = new Label()
             {
                 Text = "2 PDF CONVERTER",
@@ -180,10 +241,21 @@ namespace MarkToPdf
             };
             pnlMainCard.Controls.Add(lblTitle);
 
+            // Ayarlar (dil seçimi) menüsü — her zaman erişilebilir olsun diye
+            // cark.png bulunamasa bile bir "⚙" etiketiyle her zaman gösteriliyor.
+            var langMenu = new ContextMenuStrip();
+            menuItemTurkish = new ToolStripMenuItem("Türkçe");
+            menuItemEnglish = new ToolStripMenuItem("English");
+            menuItemTurkish.Click += (s, e) => SetLanguage(AppLanguage.Turkish);
+            menuItemEnglish.Click += (s, e) => SetLanguage(AppLanguage.English);
+            langMenu.Items.Add(menuItemTurkish);
+            langMenu.Items.Add(menuItemEnglish);
+
+            Control settingsControl;
             string? carkPath = FindAsset("cark.png");
             if (carkPath != null)
             {
-                PictureBox picSettings = new PictureBox()
+                settingsControl = new PictureBox()
                 {
                     Image = Image.FromFile(carkPath),
                     SizeMode = PictureBoxSizeMode.Zoom,
@@ -192,8 +264,23 @@ namespace MarkToPdf
                     BackColor = Color.Transparent,
                     Cursor = Cursors.Hand
                 };
-                pnlMainCard.Controls.Add(picSettings);
             }
+            else
+            {
+                settingsControl = new Label()
+                {
+                    Text = "\u2699", // ⚙ gear glyph
+                    Font = new Font("Segoe UI", 15f, FontStyle.Bold),
+                    ForeColor = Color.FromArgb(51, 65, 85),
+                    BackColor = Color.Transparent,
+                    TextAlign = ContentAlignment.MiddleCenter,
+                    Size = new Size(28, 28),
+                    Location = new Point(865, 22),
+                    Cursor = Cursors.Hand
+                };
+            }
+            settingsControl.Click += (s, e) => langMenu.Show(settingsControl, new Point(0, settingsControl.Height));
+            pnlMainCard.Controls.Add(settingsControl);
 
             // 3. SOL TARAF: TEK PARÇA BEYAZ KART (Dropzone + Uploads + Clear)
             pnlWhiteCard = new Panel()
@@ -239,9 +326,8 @@ namespace MarkToPdf
                 pnlDrop.Controls.Add(picCloud);
             }
 
-            Label lblDropText = new Label()
+            lblDropText = new Label()
             {
-                Text = "Drag and drop files here or click [Choose File]",
                 Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(51, 65, 85),
                 BackColor = Color.Transparent,
@@ -260,9 +346,8 @@ namespace MarkToPdf
             pnlWhiteCard.Controls.Add(pnlDrop);
 
             // B) UPLOADS BAŞLIĞI
-            Label lblUploads = new Label()
+            lblUploads = new Label()
             {
-                Text = "Uploads",
                 Font = new Font("Segoe UI", 13f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(15, 23, 42),
                 BackColor = Color.Transparent,
@@ -282,10 +367,10 @@ namespace MarkToPdf
                 BackColor = Color.White,
                 Font = new Font("Segoe UI", 9.5f)
             };
-            lvUploads.Columns.Add("File Name", 250);
-            lvUploads.Columns.Add("Size", 90);
-            lvUploads.Columns.Add("Status", 124);
-            lvUploads.Columns.Add("Actions", 90);
+            colFileName = lvUploads.Columns.Add("File Name", 250);
+            colSize = lvUploads.Columns.Add("Size", 90);
+            colStatus = lvUploads.Columns.Add("Status", 124);
+            colActions = lvUploads.Columns.Add("Actions", 90);
             pnlWhiteCard.Controls.Add(lvUploads);
 
             // D) BEYAZ KARTIN SAĞ ALTINDAKİ "CLEAR" BUTONU (BufferedPanel)
@@ -312,7 +397,7 @@ namespace MarkToPdf
 
                 TextRenderer.DrawText(
                     e.Graphics,
-                    "CLEAR",
+                    Localization.T("Clear"),
                     new Font("Segoe UI", 9.5f, FontStyle.Bold),
                     btnClear.ClientRectangle,
                     Color.White,
@@ -323,7 +408,7 @@ namespace MarkToPdf
             {
                 selectedFilePaths.Clear();
                 lvUploads.Items.Clear();
-                lblStatus.Text = "Tüm seçimler temizlendi.";
+                lblStatus.Text = Localization.T("StatusCleared");
             };
             pnlWhiteCard.Controls.Add(btnClear);
 
@@ -336,9 +421,8 @@ namespace MarkToPdf
             };
             pnlOptions.Region = Region.FromHrgn(CreateRoundRectRgn(0, 0, pnlOptions.Width, pnlOptions.Height, 24, 24));
 
-            Label lblOptTitle = new Label()
+            lblOptTitle = new Label()
             {
-                Text = "CONVERSION OPTIONS",
                 Font = new Font("Segoe UI", 10f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(15, 23, 42),
                 BackColor = Color.Transparent,
@@ -346,9 +430,8 @@ namespace MarkToPdf
                 AutoSize = true
             };
 
-            Label lblSelFormat = new Label()
+            lblSelFormat = new Label()
             {
-                Text = "Select Output Format",
                 Font = new Font("Segoe UI", 8.5f, FontStyle.Regular),
                 ForeColor = Color.FromArgb(75, 85, 99),
                 BackColor = Color.Transparent,
@@ -402,7 +485,7 @@ namespace MarkToPdf
 
                 TextRenderer.DrawText(
                     e.Graphics,
-                    "START CONVERSION",
+                    Localization.T("StartConversion"),
                     new Font("Segoe UI", 10.5f, FontStyle.Bold),
                     btnConvert.ClientRectangle,
                     Color.White,
@@ -448,10 +531,9 @@ namespace MarkToPdf
             };
             pnlMainCard.Controls.Add(pnlCapsule);
 
-            // 6. ALT BİLGİ LİNKLERİ VE DURUM METNİ
-            Label lblFooter = new Label()
+            // 6. ALT BİLGİ LİNKLERİ (Help / About Us, artık işlevsel) VE DURUM METNİ
+            lblHelp = new Label()
             {
-                Text = "Help          About Us",
                 Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(51, 65, 85),
                 BackColor = Color.Transparent,
@@ -459,11 +541,27 @@ namespace MarkToPdf
                 AutoSize = true,
                 Cursor = Cursors.Hand
             };
-            pnlMainCard.Controls.Add(lblFooter);
+            lblHelp.Click += (s, e) =>
+                MessageBox.Show(Localization.T("HelpBody"), Localization.T("HelpTitle"),
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+            pnlMainCard.Controls.Add(lblHelp);
+
+            lblAboutUs = new Label()
+            {
+                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                ForeColor = Color.FromArgb(51, 65, 85),
+                BackColor = Color.Transparent,
+                Location = new Point(120, 575),
+                AutoSize = true,
+                Cursor = Cursors.Hand
+            };
+            lblAboutUs.Click += (s, e) =>
+                MessageBox.Show(Localization.T("AboutBody"), Localization.T("AboutTitle"),
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+            pnlMainCard.Controls.Add(lblAboutUs);
 
             lblStatus = new Label()
             {
-                Text = "Dönüştürülecek dosyaları sürükleyin veya seçin...",
                 Font = new Font("Segoe UI", 8.5f),
                 ForeColor = Color.FromArgb(100, 116, 139),
                 BackColor = Color.Transparent,
@@ -498,7 +596,9 @@ namespace MarkToPdf
             using (var ofd = new OpenFileDialog())
             {
                 ofd.Multiselect = true;
-                ofd.Filter = "Tüm Desteklenen Dosyalar (*.md;*.txt;*.png;*.jpg;*.jpeg;*.docx;*.html;*.htm;*.xlsx)|*.md;*.txt;*.png;*.jpg;*.jpeg;*.docx;*.html;*.htm;*.xlsx|Tüm Dosyalar (*.*)|*.*";
+                ofd.Filter =
+                    $"{Localization.T("FileDialogSupported")} (*.md;*.txt;*.png;*.jpg;*.jpeg;*.docx;*.html;*.htm;*.xlsx)|*.md;*.txt;*.png;*.jpg;*.jpeg;*.docx;*.html;*.htm;*.xlsx|" +
+                    $"{Localization.T("FileDialogAll")} (*.*)|*.*";
 
                 if (ofd.ShowDialog() == DialogResult.OK)
                 {
@@ -518,20 +618,20 @@ namespace MarkToPdf
                     selectedFilePaths.Add(path);
 
                     FileInfo fi = new FileInfo(path);
-                    string sizeText = fi.Length > 1024 * 1024 
-                        ? $"{fi.Length / (1024.0 * 1024.0):F1} MB" 
+                    string sizeText = fi.Length > 1024 * 1024
+                        ? $"{fi.Length / (1024.0 * 1024.0):F1} MB"
                         : $"{fi.Length / 1024} KB";
 
                     ListViewItem row = new ListViewItem(fi.Name);
                     row.SubItems.Add(sizeText);
-                    row.SubItems.Add("Hazır");
-                    row.SubItems.Add("Bekliyor");
+                    row.SubItems.Add(Localization.T("StatusReady"));
+                    row.SubItems.Add(Localization.T("StatusWaiting"));
                     row.Tag = path;
                     lvUploads.Items.Add(row);
                 }
             }
 
-            lblStatus.Text = $"{selectedFilePaths.Count} dosya dönüştürülmeye hazır.";
+            lblStatus.Text = Localization.T("StatusFilesReady", selectedFilePaths.Count);
         }
 
         private void PnlDrop_DragEnter(object? sender, DragEventArgs e)
@@ -558,7 +658,8 @@ namespace MarkToPdf
         {
             if (selectedFilePaths.Count == 0)
             {
-                MessageBox.Show("Lütfen dönüştürülecek en az bir dosya seçin veya sürükleyin!", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(Localization.T("WarnNoFileMsg"), Localization.T("WarnNoFileTitle"),
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -572,7 +673,7 @@ namespace MarkToPdf
                 progressBar.Maximum = selectedFilePaths.Count;
                 progressBar.Value = 0;
 
-                lblStatus.Text = "Tarayıcı motoru hazırlanıyor...";
+                lblStatus.Text = Localization.T("StatusPreparingEngine");
 
                 var browserFetcher = new BrowserFetcher();
                 await browserFetcher.DownloadAsync();
@@ -589,10 +690,10 @@ namespace MarkToPdf
 
                     if (i < lvUploads.Items.Count)
                     {
-                        lvUploads.Items[i].SubItems[2].Text = "Dönüştürülüyor...";
+                        lvUploads.Items[i].SubItems[2].Text = Localization.T("StatusConverting");
                     }
 
-                    lblStatus.Text = $"Dönüştürülüyor ({i + 1}/{selectedFilePaths.Count}): {fileName}";
+                    lblStatus.Text = Localization.T("StatusConvertingFile", i + 1, selectedFilePaths.Count, fileName);
 
                     try
                     {
@@ -603,11 +704,18 @@ namespace MarkToPdf
 
                         await using var page = await browser.NewPageAsync();
                         await page.SetContentAsync(htmlContent);
-                        await page.PdfAsync(outputPdfPath);
+
+                        // PrintBackground olmadan Chromium arka plan renklerini/gölgeleri
+                        // PDF'e basmıyor (örn. Excel tablo başlıkları, kod blokları kayboluyordu).
+                        await page.PdfAsync(outputPdfPath, new PdfOptions
+                        {
+                            Format = PaperFormat.A4,
+                            PrintBackground = true
+                        });
 
                         if (i < lvUploads.Items.Count)
                         {
-                            lvUploads.Items[i].SubItems[2].Text = "Tamamlandı ✔";
+                            lvUploads.Items[i].SubItems[2].Text = Localization.T("StatusCompleted");
                         }
                         successCount++;
                     }
@@ -615,7 +723,7 @@ namespace MarkToPdf
                     {
                         if (i < lvUploads.Items.Count)
                         {
-                            lvUploads.Items[i].SubItems[2].Text = "Hata ✖";
+                            lvUploads.Items[i].SubItems[2].Text = Localization.T("StatusError");
                         }
                         failCount++;
                     }
@@ -623,14 +731,15 @@ namespace MarkToPdf
                     progressBar.Value = i + 1;
                 }
 
-                lblStatus.Text = $"Bitti! (Başarılı: {successCount}, Hata: {failCount})";
-                MessageBox.Show($"Dönüştürme işlemi tamamlandı!\n\nBaşarılı: {successCount}\nHatalı: {failCount}",
-                                "Sonuç", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                lblStatus.Text = Localization.T("StatusDone", successCount, failCount);
+                MessageBox.Show(Localization.T("ResultMsg", successCount, failCount),
+                    Localization.T("ResultTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                lblStatus.Text = "Genel hata oluştu!";
-                MessageBox.Show($"Beklenmedik bir hata oluştu:\n{ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                lblStatus.Text = Localization.T("StatusGeneralError");
+                MessageBox.Show(Localization.T("ErrorMsg", ex.Message), Localization.T("ErrorTitle"),
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
